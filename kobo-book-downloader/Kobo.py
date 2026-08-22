@@ -25,6 +25,9 @@ except ImportError:
 class KoboException( Exception ):
 	pass
 
+class DownloadUrlListEmptyKoboException( KoboException ):
+	pass
+
 # The hook's workflow is based on this:
 # https://github.com/requests/toolbelt/blob/master/requests_toolbelt/auth/http_proxy_digest.py
 def ReauthenticationHook( r, *args, **kwargs ):
@@ -355,7 +358,7 @@ class Kobo:
 			raise KoboException( "Download URL can't be found for product '%s'." % productId )
 
 		if len( jsonContentUrls ) == 0:
-			raise KoboException( "Download URL list is empty for product '%s'. If this is an archived book then it must be unarchived first on the Kobo website (https://www.kobo.com/help/en-US/article/1799/restoring-deleted-books-or-magazines)." % productId )
+			raise DownloadUrlListEmptyKoboException( "The download URL list is empty. If this is an archived book then it must be unarchived first on the Kobo website (https://www.kobo.com/help/en-US/article/1799/restoring-deleted-books-or-magazines). If the book can be downloaded on a Kobo e-reader or in the Kobo application then this is a bug." )
 
 		for jsonContentUrl in jsonContentUrls:
 			if ( jsonContentUrl[ "DRMType" ] == "KDRM" or jsonContentUrl[ "DRMType" ] == "SignedNoDrm" ) and \

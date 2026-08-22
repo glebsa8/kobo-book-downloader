@@ -1,5 +1,5 @@
 from Globals import Globals
-from Kobo import Kobo, KoboException
+from Kobo import DownloadUrlListEmptyKoboException, Kobo, KoboException
 
 import colorama
 
@@ -104,6 +104,16 @@ Examples:
 		return isRemoved
 
 	@staticmethod
+	def __DownloadBookWithLogging( revisionId: str, outputPath: str ) -> None:
+		print( f"Downloading book to '{outputPath}'." )
+
+		try:
+			Globals.Kobo.Download( revisionId, Kobo.DisplayProfile, outputPath )
+		except DownloadUrlListEmptyKoboException as e:
+			message = f"ERROR: downloading book to '{outputPath}' has failed. {e}"
+			print( colorama.Style.BRIGHT + colorama.Fore.RED + message + colorama.Style.RESET_ALL )
+
+	@staticmethod
 	def __GetBook( revisionId: str, outputPath: str ) -> None:
 		if os.path.isdir( outputPath ):
 			book = Globals.Kobo.GetBookInfo( revisionId )
@@ -114,8 +124,7 @@ Examples:
 			if not os.path.isdir( parentPath ):
 				raise KoboException( "The parent directory ('%s') of the output file must exist." % parentPath )
 
-		print( "Downloading book to '%s'." % outputPath )
-		Globals.Kobo.Download( revisionId, Kobo.DisplayProfile, outputPath )
+		Commands.__DownloadBookWithLogging( revisionId, outputPath )
 
 	@staticmethod
 	def __GetAllBooks( outputPath: str ) -> None:
@@ -146,8 +155,7 @@ Examples:
 				print( colorama.Fore.LIGHTYELLOW_EX + ( "Skipping archived book %s." % title ) + colorama.Fore.RESET )
 				continue
 
-			print( "Downloading book to '%s'." % outputFilePath )
-			Globals.Kobo.Download( bookMetadata[ "RevisionId" ], Kobo.DisplayProfile, outputFilePath )
+			Commands.__DownloadBookWithLogging( bookMetadata[ "RevisionId" ], outputFilePath )
 
 	@staticmethod
 	def GetBookOrBooks( revisionId: str, outputPath: str, getAll: bool ) -> None:
