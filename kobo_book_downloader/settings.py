@@ -23,6 +23,7 @@ class Settings:
 		if not os.path.isfile( self.SettingsFilePath ):
 			return
 
+		Settings.__EnsureOwnerOnlyPermissions( self.SettingsFilePath )
 		with open( self.SettingsFilePath, "r" ) as f:
 			jsonText = f.read()
 			jsonObject = json.loads( jsonText )
@@ -31,14 +32,19 @@ class Settings:
 	def Save( self ) -> None:
 		settingsDirectory = os.path.dirname( self.SettingsFilePath )
 		os.makedirs( settingsDirectory, exist_ok = True )
-		with open( self.SettingsFilePath, "w" ) as f:
+		if os.path.isfile( self.SettingsFilePath ):
+			Settings.__EnsureOwnerOnlyPermissions( self.SettingsFilePath )
+
+		fileDescriptor = os.open( self.SettingsFilePath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600 )
+		with os.fdopen( fileDescriptor, "w" ) as f:
 			jsonObject = self.__SaveToJson()
 			f.write( json.dumps( jsonObject, indent = 4 ) )
-		try:
-			os.chmod( self.SettingsFilePath, 0o600 )
-		except OSError:
-			# Some platforms and mounted filesystems do not support POSIX permissions.
-			pass
+		Settings.__EnsureOwnerOnlyPermissions( self.SettingsFilePath )
+
+	@staticmethod
+	def __EnsureOwnerOnlyPermissions( settingsFilePath: str ) -> None:
+		if os.name == "posix":
+			os.chmod( settingsFilePath, 0o600 )
 
 	def __SaveToJson( self ) -> dict:
 		return {

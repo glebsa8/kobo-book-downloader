@@ -47,6 +47,17 @@ All examples below start with `uv run kobo-book-downloader`.
 
 The output directory must already exist. Use the ID printed by `list` when running `get` for one book.
 
+## Output and size safety
+
+The downloader never overwrites an existing destination, including a symlink. It writes to random, exclusively created temporary files in the destination directory and publishes a completed book only after download and DRM processing succeed. Secure publication requires a destination filesystem that supports hard links.
+
+Basic resource limits protect the process from unexpectedly large downloads and EPUB ZIP contents:
+
+- maximum download size: 2 GiB;
+- maximum EPUB ZIP entries during DRM removal: 10,000;
+- maximum uncompressed size of one EPUB ZIP entry: 512 MiB;
+- maximum total uncompressed EPUB ZIP size: 2 GiB.
+
 ## Run with Docker
 
 Build the image and create host directories for books and configuration:

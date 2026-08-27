@@ -1,5 +1,8 @@
 import json
+import os
 import stat
+
+import pytest
 
 from kobo_book_downloader.settings import Settings
 
@@ -17,7 +20,8 @@ def test_settings_use_xdg_config_home_and_round_trip(tmp_path, monkeypatch):
 	settings_path = config_home / "kobo-book-downloader.json"
 	assert settings_path.is_file()
 	assert json.loads( settings_path.read_text() )[ "AccessToken" ] == "access-token"
-	assert stat.S_IMODE( settings_path.stat().st_mode ) == 0o600
+	if os.name == "posix":
+		assert stat.S_IMODE( settings_path.stat().st_mode ) == 0o600
 
 	reloaded = Settings()
 	assert reloaded.AccessToken == "access-token"
@@ -43,3 +47,15 @@ def test_settings_keep_using_an_existing_legacy_file(tmp_path, monkeypatch):
 	settings = Settings()
 
 	assert settings.SettingsFilePath == str( legacy_path )
+
+
+@pytest.mark.skipif( os.name != "posix", reason = "POSIX permissions are Unix-specific" )
+def test_loading_tightens_existing_settings_permissions( tmp_path, monkeypatch ):
+	monkeypatch.setenv( "XDG_CONFIG_HOME", str( tmp_path ) )
+	settingsPath = tmp_path / "kobo-book-downloader.json"
+	settingsPath.write_text( "{}" )
+	settingsPath.chmod( 0o644 )
+
+	Settings()
+
+	assert stat.S_IMODE( settingsPath.stat().st_mode ) == 0o600

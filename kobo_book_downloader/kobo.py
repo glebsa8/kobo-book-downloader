@@ -1,9 +1,11 @@
+from .errors import DownloadUrlListEmptyKoboException, KoboException
 from .globals import Globals
 from .kobo_drm_remover import KoboDrmRemover
+from .secure_files import OwnedTemporaryFile
 
 import requests
 
-from typing import Dict, Tuple
+from typing import BinaryIO, Dict, Tuple
 import base64
 import html
 import os
@@ -20,12 +22,6 @@ import urllib
 try:
 	import readline
 except ImportError:
-	pass
-
-class KoboException( Exception ):
-	pass
-
-class DownloadUrlListEmptyKoboException( KoboException ):
 	pass
 
 # The hook's workflow is based on this:
@@ -71,6 +67,7 @@ class Kobo:
 	DeviceModel = "Kobo Aura ONE"
 	DeviceOs = "3.0.35+"
 	DeviceOsVersion = "NA"
+	MaxDownloadBytes = 2 * 1024 * 1024 * 1024
 
 	def __init__( self ):
 		headers = {
@@ -380,39 +377,92 @@ class Kobo:
 
 		raise KoboException( message )
 
-	def __DownloadToFile( self, url, outputPath: str ) -> None:
+	def __DownloadToFile( self, url, outputFile: BinaryIO ) -> None:
 		Globals.Logger.debug( "Kobo.__DownloadToFile" )
 
 		response = self.Session.get( url, stream = True )
-		response.raise_for_status()
-		with open( outputPath, "wb" ) as f:
+		try:
+			response.raise_for_status()
+			contentLength = response.headers.get( "Content-Length" )
+			try:
+				contentLength = int( contentLength ) if contentLength is not None else None
+			except ( TypeError, ValueError ):
+				contentLength = None
+
+			if contentLength is not None and contentLength > Kobo.MaxDownloadBytes:
+				raise KoboException(
+					"The download is %d bytes, which exceeds the %d-byte limit."
+					% ( contentLength, Kobo.MaxDownloadBytes )
+				)
+
+			downloadedBytes = 0
 			for chunk in response.iter_content( chunk_size = 1024 * 256 ):
-				f.write( chunk )
+				if not chunk:
+					continue
+
+				downloadedBytes += len( chunk )
+				if downloadedBytes > Kobo.MaxDownloadBytes:
+					raise KoboException(
+						"The download exceeded the %d-byte limit while streaming."
+						% Kobo.MaxDownloadBytes
+					)
+
+				outputFile.write( chunk )
+		finally:
+			response.close()
+
+	@staticmethod
+	def __CleanupTemporaryFiles( temporaryFiles: list[ OwnedTemporaryFile ] ) -> None:
+		for temporaryFile in reversed( temporaryFiles ):
+			try:
+				temporaryFile.Cleanup()
+			except OSError as e:
+				if Globals.Logger is not None:
+					Globals.Logger.warning( "Could not remove temporary file '%s': %s", temporaryFile.Path, e )
 
 	# Downloading archived books is not possible, the "content_access_book" API endpoint returns with empty ContentKeys
 	# and ContentUrls for them.
 	def Download( self, productId: str, displayProfile: str, outputPath: str ) -> None:
 		Globals.Logger.debug( "Kobo.Download" )
+		outputPath = os.path.abspath( outputPath )
+		if os.path.lexists( outputPath ):
+			raise KoboException( "The output path already exists and will not be overwritten: '%s'." % outputPath )
+
+		outputDirectory = os.path.dirname( outputPath )
+		if not os.path.isdir( outputDirectory ):
+			raise KoboException( "The output directory does not exist: '%s'." % outputDirectory )
 
 		jsonResponse = self.__GetContentAccessBook( productId, displayProfile )
 		contentKeys = Kobo.__GetContentKeys( jsonResponse )
 		downloadUrl, hasDrm = Kobo.__GetDownloadInfo( productId, jsonResponse )
 
-		temporaryOutputPath = outputPath + ".downloading"
-
+		temporaryFiles = []
 		try:
-			self.__DownloadToFile( downloadUrl, temporaryOutputPath )
+			downloadFile = OwnedTemporaryFile( outputDirectory )
+			temporaryFiles.append( downloadFile )
+			self.__DownloadToFile( downloadUrl, downloadFile.File )
+			downloadFile.FlushAndSync()
 
 			if hasDrm:
+				downloadFile.File.seek( 0 )
+				completedFile = OwnedTemporaryFile( outputDirectory )
+				temporaryFiles.append( completedFile )
 				drmRemover = KoboDrmRemover( Globals.Settings.DeviceId, Globals.Settings.UserId )
-				drmRemover.RemoveDrm( temporaryOutputPath, outputPath, contentKeys )
-				os.remove( temporaryOutputPath )
+				drmRemover.RemoveDrm( downloadFile.File, completedFile.File, contentKeys )
 			else:
-				os.rename( temporaryOutputPath, outputPath )
-		except:
-			if os.path.isfile( temporaryOutputPath ):
-				os.remove( temporaryOutputPath )
-			if os.path.isfile( outputPath ):
-				os.remove( outputPath )
+				completedFile = downloadFile
 
-			raise
+			try:
+				completedFile.PublishWithoutOverwrite( outputPath )
+			except FileExistsError as e:
+				raise KoboException(
+					"The output path was created during the download and will not be overwritten: '%s'."
+					% outputPath
+				) from e
+			except ( OSError, RuntimeError ) as e:
+				raise KoboException(
+					"Could not safely publish the completed book to '%s'. The destination filesystem must support hard links: %s"
+					% ( outputPath, e )
+				) from e
+		finally:
+			Kobo.__CleanupTemporaryFiles( temporaryFiles )

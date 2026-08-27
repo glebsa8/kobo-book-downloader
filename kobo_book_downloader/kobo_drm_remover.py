@@ -1,7 +1,9 @@
+from .errors import KoboException
+
 from Crypto.Cipher import AES
 from Crypto.Util import Padding
 
-from typing import Dict
+from typing import BinaryIO, Dict
 import base64
 import binascii
 import hashlib
@@ -9,6 +11,10 @@ import zipfile
 
 # Based on obok.py by Physisticated.
 class KoboDrmRemover:
+	MaxEntryCount = 10_000
+	MaxEntryUncompressedBytes = 512 * 1024 * 1024
+	MaxTotalUncompressedBytes = 2 * 1024 * 1024 * 1024
+
 	def __init__( self, deviceId: str, userId: str ):
 		self.DeviceIdUserIdKey = KoboDrmRemover.__MakeDeviceIdUserIdKey( deviceId, userId )
 
@@ -27,12 +33,38 @@ class KoboDrmRemover:
 		decryptedContents = contentAes.decrypt( contents )
 		return Padding.unpad( decryptedContents, AES.block_size, "pkcs7" )
 
-	def RemoveDrm( self, inputPath: str, outputPath: str, contentKeys: Dict[ str, str ] ) -> None:
+	@staticmethod
+	def __ValidateZipLimits( entries: list ) -> None:
+		if len( entries ) > KoboDrmRemover.MaxEntryCount:
+			raise KoboException(
+				"The EPUB ZIP contains %d entries, which exceeds the %d-entry limit."
+				% ( len( entries ), KoboDrmRemover.MaxEntryCount )
+			)
+
+		totalUncompressedBytes = 0
+		for entry in entries:
+			if entry.file_size > KoboDrmRemover.MaxEntryUncompressedBytes:
+				raise KoboException(
+					"The EPUB ZIP entry '%s' expands to %d bytes, which exceeds the %d-byte per-entry limit."
+					% ( entry.filename, entry.file_size, KoboDrmRemover.MaxEntryUncompressedBytes )
+				)
+
+			totalUncompressedBytes += entry.file_size
+			if totalUncompressedBytes > KoboDrmRemover.MaxTotalUncompressedBytes:
+				raise KoboException(
+					"The EPUB ZIP expands to %d bytes, which exceeds the %d-byte total limit."
+					% ( totalUncompressedBytes, KoboDrmRemover.MaxTotalUncompressedBytes )
+				)
+
+	def RemoveDrm( self, inputPath: BinaryIO | str, outputPath: BinaryIO | str, contentKeys: Dict[ str, str ] ) -> None:
 		with zipfile.ZipFile( inputPath, "r" ) as inputZip:
+			entries = inputZip.infolist()
+			KoboDrmRemover.__ValidateZipLimits( entries )
+
 			with zipfile.ZipFile( outputPath, "w", zipfile.ZIP_DEFLATED ) as outputZip:
-				for filename in inputZip.namelist():
-					contents = inputZip.read( filename )
-					contentKeyBase64 = contentKeys.get( filename, None )
+				for entry in entries:
+					contents = inputZip.read( entry )
+					contentKeyBase64 = contentKeys.get( entry.filename, None )
 					if contentKeyBase64 is not None:
 						contents = self.__DecryptContents( contents, contentKeyBase64 )
-					outputZip.writestr( filename, contents )
+					outputZip.writestr( entry.filename, contents )
