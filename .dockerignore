@@ -1,0 +1,12 @@
+.git
+.idea
+.pytest_cache
+.rumdl_cache
+.uv-cache
+.venv
+books
+dist
+kobo-config
+__pycache__
+*.downloading
+*.epub

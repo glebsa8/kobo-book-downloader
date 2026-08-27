@@ -29,9 +29,16 @@ class Settings:
 			self.__LoadFromJson( jsonObject )
 
 	def Save( self ) -> None:
+		settingsDirectory = os.path.dirname( self.SettingsFilePath )
+		os.makedirs( settingsDirectory, exist_ok = True )
 		with open( self.SettingsFilePath, "w" ) as f:
 			jsonObject = self.__SaveToJson()
 			f.write( json.dumps( jsonObject, indent = 4 ) )
+		try:
+			os.chmod( self.SettingsFilePath, 0o600 )
+		except OSError:
+			# Some platforms and mounted filesystems do not support POSIX permissions.
+			pass
 
 	def __SaveToJson( self ) -> dict:
 		return {
@@ -54,10 +61,16 @@ class Settings:
 	@staticmethod
 	def __GetCacheFilePath() -> str:
 		cacheHome = os.environ.get( "XDG_CONFIG_HOME" )
-		if ( cacheHome is None ) or ( not os.path.isdir( cacheHome ) ):
-			home = os.path.expanduser( "~" )
-			cacheHome = os.path.join( home, ".config" )
-			if not os.path.isdir( cacheHome ):
-				cacheHome = home
+		if cacheHome is not None:
+			return os.path.join( cacheHome, "kobo-book-downloader.json" )
 
-		return os.path.join( cacheHome, "kobo-book-downloader.json" )
+		home = os.path.expanduser( "~" )
+		cacheHome = os.path.join( home, ".config" )
+		settingsFilePath = os.path.join( cacheHome, "kobo-book-downloader.json" )
+
+		# Keep using the pre-XDG location when an existing installation has credentials there.
+		legacySettingsFilePath = os.path.join( home, "kobo-book-downloader.json" )
+		if os.path.isfile( legacySettingsFilePath ) and not os.path.isfile( settingsFilePath ):
+			return legacySettingsFilePath
+
+		return settingsFilePath

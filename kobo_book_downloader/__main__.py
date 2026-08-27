@@ -1,8 +1,8 @@
-from Commands import Commands
-from Globals import Globals
-from Kobo import Kobo, KoboException
-from LogFormatter import LogFormatter
-from Settings import Settings
+from .commands import Commands
+from .globals import Globals
+from .kobo import Kobo, KoboException
+from .log_formatter import LogFormatter
+from .settings import Settings
 
 import colorama
 import requests
@@ -68,10 +68,13 @@ def Main() -> None:
 		elif arguments.Command == "wishlist":
 			Commands.ListWishListedBooks()
 
-if __name__ == '__main__':
+def main() -> None:
 	try:
 		Main()
 	except KoboException as e:
 		Globals.Logger.error( e )
 	except requests.exceptions.Timeout as e:
 		Globals.Logger.error( "The request has timed out." )
+
+if __name__ == '__main__':
+	main()

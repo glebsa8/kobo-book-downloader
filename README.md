@@ -1,74 +1,125 @@
-## kobo-book-downloader
+# Kobo Book Downloader
 
-With kobo-book-downloader you can download your purchased [Kobo](https://www.kobo.com/) books and remove the Digital Rights Management (DRM) protection from them. The resulting [EPUB](https://en.wikipedia.org/wiki/EPUB) files can be read with, amongst others, [KOReader](https://github.com/koreader/koreader).
+Kobo Book Downloader is a command-line tool that downloads books you purchased from Kobo. It can turn Kobo's KEPUB/EPUB download into a DRM-free EPUB that you can read in apps such as [KOReader](https://github.com/koreader/koreader).
 
-Unlike [obok.py](https://github.com/apprenticeharper/DeDRM_tools/blob/master/Other_Tools/Kobo/obok.py), kobo-book-downloader doesn't require any pre-downloading through a Kobo e-reader or application.
+It talks directly to Kobo, so you do not need to download each book through a Kobo e-reader or desktop application first.
 
-kobo-book-downloader is a command line program. It looks like this:
+> Use this tool only for books you are authorized to download, and follow the laws and terms that apply where you live.
 
-![Screenshot](https://raw.githubusercontent.com/TnS-hun/kobo-book-downloader/master/screenshot.png)
+![Kobo Book Downloader in a terminal](screenshot.png)
 
-## Installation
+## Quick start with uv
 
-kobo-book-downloader requires [Python 3+](https://www.python.org/). Make sure that you have it installed. You can verify it by running `python --version` from the terminal.
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/) and a Kobo account with at least one purchased book.
 
-Use Git to clone this repository or [download it](https://github.com/TnS-hun/kobo-book-downloader/archive/master.zip) as a zip. If you downloaded it as a zip then you have to extract it.
+From the repository directory:
 
-From your terminal enter the directory where kobo-book-downloader is then run `pip install -r requirements.txt` to install its dependencies.
-
-It has been tested on Linux but it should work on other platforms too.
-
-## Usage
-
-To interactively select from your unread books to download:
-```
-python kobo-book-downloader pick /dir/
-```
-To interactively select from all of your books to download:
-```
-python kobo-book-downloader pick /dir/ --all
-```
-To list your unread books:
-```
-python kobo-book-downloader list
-```
-To list all your books:
-```
-python kobo-book-downloader list --all
-```
-To download a book:
-```
-python kobo-book-downloader get /dir/book.epub 01234567-89ab-cdef-0123-456789abcdef
-```
-To download a book and name the file automatically:
-```
-python kobo-book-downloader get /dir/ 01234567-89ab-cdef-0123-456789abcdef
-```
-To download all your books:
-```
-python kobo-book-downloader get /dir/ --all
-```
-To list all your books from your wish list:
-```
-python kobo-book-downloader wishlist
-```
-To show the location of the program's configuration file:
-```
-python kobo-book-downloader info
-```
-Running the program without any arguments will show the help:
-```
-python kobo-book-downloader
-```
-To get additional help for the **list** command (it works for **get** and **pick** too):
-```
-python kobo-book-downloader list --help
+```console
+uv sync --locked
+mkdir -p books
+uv run kobo-book-downloader pick ./books
 ```
 
-## Notes
+On the first command that contacts Kobo, the tool prints an activation URL and code. Open the URL, enter the code, and sign in to Kobo in your browser. The terminal waits until activation is complete, then remembers the resulting access tokens for later runs.
 
-kobo-book-downloader uses the same web-based activation method to login as the Kobo e-readers. You will have to open an activation link -- that uses the official [Kobo](https://www.kobo.com/) site -- in your browser and enter the code, then you might need to login too if kobo.com asks you to. Once kobo-book-downloader has successfully logged in, it won't ask for the activation again. kobo-book-downloader doesn't store your Kobo password in any form, it works with access tokens.
+Run the help at any time:
 
-The program was made out of frustration with my workflow (purchase book on Kobo, turn on WiFi on the router, exit from KOReader, start Nickel from the Kobo start menu, turn on WiFi on the Kobo e-reader, wait till the downloading and other syncing finishes, turn off the WiFi on the e-reader, turn off the WiFi on the router, connect the e-reader via USB, run obok.py, copy the book to the e-reader, power off the e-reader, start KOReader, and finally start reading).
+```console
+uv run kobo-book-downloader --help
+```
 
-The DRM removal code is based on Physisticated's [obok.py](https://github.com/apprenticeharper/DeDRM_tools/blob/master/Other_Tools/Kobo/obok.py). Thank you!
+## Common commands
+
+All examples below start with `uv run kobo-book-downloader`.
+
+| Command                         | What it does |
+| ------------------------------- | ------------ |
+| `list`                          | List unread books and their IDs. |
+| `list --all`                    | List both read and unread books. |
+| `pick ./books`                  | Interactively select unread books to download. |
+| `pick ./books --all`            | Interactively select from all books. |
+| `get ./books BOOK_ID`           | Download one book and choose its filename automatically. |
+| `get ./books/book.epub BOOK_ID` | Download one book to an exact filename. |
+| `get ./books --all`             | Download every available, non-archived book. |
+| `wishlist`                      | List books on your Kobo wish list. |
+| `info`                          | Print the configuration file location. |
+| `--verbose list`                | List books with debug logging enabled. |
+
+The output directory must already exist. Use the ID printed by `list` when running `get` for one book.
+
+## Run with Docker
+
+Build the image and create host directories for books and configuration:
+
+```console
+docker build -t kobo-book-downloader .
+mkdir -p books kobo-config
+```
+
+On Linux or macOS, this one command mounts both directories and starts the interactive book picker:
+
+```console
+docker run --rm -it --user "$(id -u):$(id -g)" -v "$PWD/books:/books" -v "$PWD/kobo-config:/config" kobo-book-downloader pick /books
+```
+
+- Downloaded EPUB files appear in `./books` on the host.
+- Kobo access tokens are stored in `./kobo-config/kobo-book-downloader.json` on the host.
+- Reuse both mounts on later Docker runs so the downloads and login survive the temporary container.
+
+For example, replace `pick /books` with `list --all` to list the full library, or with `get /books --all` to download it.
+
+The included Compose file provides the same mounts:
+
+```console
+mkdir -p books kobo-config
+KBD_UID="$(id -u)" KBD_GID="$(id -g)" docker compose run --rm kobo pick /books
+```
+
+## Credentials and privacy
+
+The tool does not store your Kobo password. Kobo authentication happens in your browser.
+
+It does store the device ID, serial number, access token, refresh token, Kobo user ID, and user key needed for later downloads. Treat the configuration file like a password and do not commit or share it. New files are created with owner-only permissions on filesystems that support POSIX permissions.
+
+The configuration file is located at:
+
+- `$XDG_CONFIG_HOME/kobo-book-downloader.json` when `XDG_CONFIG_HOME` is set;
+- `~/.config/kobo-book-downloader.json` for a normal local run;
+- `/config/kobo-book-downloader.json` inside Docker, which the examples map to `./kobo-config/kobo-book-downloader.json`.
+
+To confirm the exact path for the current environment, run:
+
+```console
+uv run kobo-book-downloader info
+```
+
+## Troubleshooting
+
+### An archived book will not download
+
+Restore the book on the Kobo website first. Kobo does not return download URLs or content keys for archived books.
+
+### A command fails without enough detail
+
+Put `--verbose` before the command:
+
+```console
+uv run kobo-book-downloader --verbose get ./books BOOK_ID
+```
+
+### Start authentication again
+
+Move the configuration file to a safe backup location, then run a command that contacts Kobo. A fresh activation flow will start. Keep the backup until the new login works.
+
+## Development
+
+Dependencies are pinned in `pyproject.toml` and fully resolved in `uv.lock`.
+
+```console
+make sync       # Install the locked environment
+make test       # Run tests
+make validate   # Check the lock, run tests, and build distributions
+make docker-build
+```
+
+The DRM removal code is based on Physisticated's `obok.py` from the [DeDRM tools project](https://github.com/noDRM/DeDRM_tools). Thank you to its contributors.

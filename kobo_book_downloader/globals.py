@@ -2,8 +2,8 @@ from logging import Logger
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-	from Kobo import Kobo
-	from Settings import Settings
+	from .kobo import Kobo
+	from .settings import Settings
 
 class Globals:
 	Logger = None # type: Logger | None

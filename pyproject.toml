@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kobo-book-downloader"
+version = "0.1.0"
+description = "Download purchased Kobo books and remove Kobo DRM"
+readme = "README.md"
+requires-python = ">=3.11,<4"
+license = { file = "LICENSE.md" }
+dependencies = [
+    "colorama==0.4.6",
+    "pycryptodome==3.23.0",
+    "requests==2.34.2",
+]
+
+[project.scripts]
+kobo-book-downloader = "kobo_book_downloader.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["kobo_book_downloader"]
+
+[tool.hatch.build]
+exclude = [
+    "/.rumdl_cache",
+    "/.uv-cache",
+    "/books",
+    "/dist",
+    "/kobo-config",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.uv]
+cache-dir = ".uv-cache"

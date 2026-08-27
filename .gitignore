@@ -1,2 +1,10 @@
 /.idea/
-/kobo-book-downloader/__pycache__/
+/.pytest_cache/
+/.rumdl_cache/
+/.uv-cache/
+/.venv/
+/books/
+/dist/
+/kobo-config/
+*.downloading
+__pycache__/

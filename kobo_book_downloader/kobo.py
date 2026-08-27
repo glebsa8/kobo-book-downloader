@@ -1,5 +1,5 @@
-from Globals import Globals
-from KoboDrmRemover import KoboDrmRemover
+from .globals import Globals
+from .kobo_drm_remover import KoboDrmRemover
 
 import requests
 

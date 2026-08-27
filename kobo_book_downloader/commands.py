@@ -1,5 +1,5 @@
-from Globals import Globals
-from Kobo import DownloadUrlListEmptyKoboException, Kobo, KoboException
+from .globals import Globals
+from .kobo import DownloadUrlListEmptyKoboException, Kobo, KoboException
 
 import colorama
 

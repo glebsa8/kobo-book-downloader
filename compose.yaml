@@ -1,0 +1,10 @@
+services:
+  kobo:
+    build: .
+    image: kobo-book-downloader:local
+    stdin_open: true
+    tty: true
+    user: "${KBD_UID:-1000}:${KBD_GID:-1000}"
+    volumes:
+      - ./books:/books
+      - ./kobo-config:/config
